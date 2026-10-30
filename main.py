@@ -17,6 +17,7 @@ from effects import Effects
 from sound import SoundEffects
 from controls import Gamepad, GamepadInput
 from pixel_display import PixelDisplay
+from settings import Settings, load_settings
 from tutorial import (
     EXPLANATIONS, INSTRUCTIONS, MOVE_DISTANCE, PHASE_READ_TIME, STEP_TITLES,
     TutorialProgress, TutorialStep,
@@ -341,8 +342,12 @@ class Shield:
 
 
 class Game:
-    def __init__(self, screen: pygame.Surface, sounds: SoundEffects | None = None) -> None:
+    def __init__(
+        self, screen: pygame.Surface, sounds: SoundEffects | None = None,
+        *, settings: Settings | None = None,
+    ) -> None:
         self.screen = screen
+        self.settings = settings if settings is not None else load_settings()
         self.sounds = sounds if sounds is not None else SoundEffects(enabled=False)
         self.gamepad_name = ""
         self.gamepad_hint = ""
@@ -402,7 +407,12 @@ class Game:
         self.reset()
         self.state = "title"
 
+    @property
+    def max_start_phase(self) -> int:
+        return TOTAL_PHASES + int(self.settings.extra_enabled)
+
     def reset(self, start_phase: int = 1) -> None:
+        start_phase = max(1, min(start_phase, self.max_start_phase))
         self.tutorial: TutorialProgress | None = None
         self.gamepad_bomb_armed = False
         self.sounds.pause(False)
@@ -599,6 +609,7 @@ class Game:
         return aliens
 
     def prepare_wave(self, *, extra: bool = False) -> None:
+        extra = extra and self.settings.extra_enabled
         self.extra_stage = ExtraStage() if extra else None
         self.player_y = float(PLAYER_Y)
         if self.extra_stage is None:
@@ -673,7 +684,9 @@ class Game:
         elif self.state == "title" and event.key != pygame.K_F11:
             self.start_tutorial()
         elif self.state == "debug" and event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
-            self.start_phase = event.key - pygame.K_0
+            phase = event.key - pygame.K_0
+            if phase <= self.max_start_phase:
+                self.start_phase = phase
         elif self.state in ("debug", "game_over", "victory") and event.key in (pygame.K_RETURN, pygame.K_SPACE):
             self.reset(start_phase=self.start_phase if self.state == "debug" else 1)
         elif self.tutorial is not None and event.key in (pygame.K_RETURN, pygame.K_SPACE):
@@ -709,7 +722,7 @@ class Game:
         for action in gamepad.actions:
             if action in ("previous_phase", "next_phase") and self.state == "debug":
                 direction = 1 if action == "next_phase" else -1
-                self.start_phase = (self.start_phase - 1 + direction) % 4 + 1
+                self.start_phase = (self.start_phase - 1 + direction) % self.max_start_phase + 1
             elif action == "bomb" and self.gamepad_bomb_armed:
                 self.gamepad_bomb_armed = False
                 self.launch_bomb()
@@ -757,7 +770,7 @@ class Game:
                 if self.tutorial is not None:
                     self.reset()
                 elif self.wave == TOTAL_PHASES:
-                    if self.extra_stage is None and self.lives >= EXTRA_REQUIRED_LIVES:
+                    if self.settings.extra_enabled and self.extra_stage is None and self.lives >= EXTRA_REQUIRED_LIVES:
                         self.prepare_wave(extra=True)
                     else:
                         self.finish_run("clear")
@@ -1285,7 +1298,8 @@ class Game:
                 self.draw_overlay("DEBUG START", "ENTER / SPACE TO START")
                 label = "EXTRA" if self.start_phase == 4 else f"PHASE {self.start_phase}"
                 self.draw_text(label, (400, 375), YELLOW, centered=True)
-                self.draw_text("1 / 2 / 3 / 4:EXTRA   PAD:LEFT / RIGHT", (400, 410), centered=True)
+                phases = "1 / 2 / 3 / 4:EXTRA" if self.settings.extra_enabled else "1 / 2 / 3"
+                self.draw_text(f"{phases}   PAD:LEFT / RIGHT", (400, 410), centered=True)
                 self.draw_text("F2: BACK TO TITLE", (400, 445), centered=True)
             return
         background = self.extra_background if self.extra_stage is not None else self.background
@@ -1419,11 +1433,14 @@ class Game:
         elif step == TutorialStep.DAMAGE:
             status = "ハートが1つ減りました。点滅中は無敵です" if tutorial.damage_taken else "移動せずに待つと練習用の弾が当たります"
         elif step == TutorialStep.PHASES:
-            lines.extend([
-                ("PHASE 1 → PHASE 2 → PHASE 3", CYAN),
-                (f"PHASE {TOTAL_PHASES}を残機{EXTRA_REQUIRED_LIVES}以上でクリアすると", WHITE),
-                ("追加のEXTRAステージに進めます", WHITE),
-            ])
+            lines.append(("PHASE 1 → PHASE 2 → PHASE 3", CYAN))
+            if self.settings.extra_enabled:
+                lines.extend([
+                    (f"PHASE {TOTAL_PHASES}を残機{EXTRA_REQUIRED_LIVES}以上でクリアすると", WHITE),
+                    ("追加のEXTRAステージに進めます", WHITE),
+                ])
+            else:
+                lines.append((f"PHASE {TOTAL_PHASES}をクリアすると本編クリアです", WHITE))
             status = "Enter／Spaceで本編へ進みます"
             if self.gamepad_name:
                 status = "射撃ボタン／STARTで本編へ進みます"

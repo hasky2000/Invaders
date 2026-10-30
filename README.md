@@ -32,6 +32,21 @@ python main.py
 ウィンドウの端をドラッグしてさらに拡大・縮小でき、F11で全画面とウィンドウを切り替えられます。
 縦横比は4:3を維持し、余った部分は黒帯になります。移動速度や当たり判定は表示サイズで変わりません。
 
+### EXTRAの有効・無効
+
+`main.py` と同じディレクトリの `settings.ini` で切り替えます。
+EXTRAが存在しない構成にする場合は、次のように変更してゲームを再起動してください。
+
+```ini
+[game]
+extra_enabled = false
+```
+
+無効にすると、残機数に関係なくphase3で本編クリアとなります。
+デバッグ画面はphase1〜3だけを選べるようになり、EXTRAの選択肢とチュートリアルの突入条件の案内も表示しません。
+初期値は `true`（有効）です。ファイルや項目を省略した場合も有効になります。
+以下のEXTRAに関する説明は、有効時の動作です。
+
 ### 日本語フォント
 
 チュートリアルなどの日本語表示には、`fonts/DotGothic16-Regular.ttf` を使います。
@@ -272,5 +287,5 @@ EXTRAへの突入条件、ボスへのダメージ、ビームの予告時間・
 タイトル・デバッグ画面、チュートリアルの課題順・失敗時の再開・長押しスキップ・日本語表示も検証します。
 
 ```bash
-venv/bin/python -m unittest -v test_game test_extra_stage test_controls test_pixel_display test_tutorial
+venv/bin/python -m unittest -v test_game test_extra_stage test_controls test_pixel_display test_tutorial test_settings
 ```
